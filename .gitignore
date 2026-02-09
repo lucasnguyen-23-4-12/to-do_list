@@ -1,0 +1,36 @@
+# Môi trường ảo (Quan trọng nhất)
+venv/
+.venv/
+env/
+ENV/
+bin/
+lib/
+include/
+
+# Python rác (Compiled files)
+**/__pycache__/
+*.py[cod]
+*$py.class
+
+# Biến môi trường (Chứa secret key, mật khẩu database)
+.env
+.flaskenv
+
+# Database (Nếu bạn dùng SQLite)
+*.sqlite3
+*.db
+
+# IDE / Editor (VS Code, PyCharm)
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Log files
+*.log
+logs/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
