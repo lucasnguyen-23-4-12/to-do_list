@@ -1,6 +1,7 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from typing import List
+from fastapi import FastAPI, HTTPException, Query
+from pydantic import BaseModel, Field
+from typing import List, Optional
+from datetime import datetime
 
 app = FastAPI()
 
@@ -9,49 +10,73 @@ app = FastAPI()
 # =========================
 class Todo(BaseModel):
     id: int
-    title: str
+    title: str = Field(..., min_length=3, max_length=100)
     is_done: bool = False
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
-# "Database giả" trong RAM
+
+# "Database giả"
 todos: List[Todo] = []
 
-# =========================
-# 1️⃣ POST /todos - Tạo todo
-# =========================
-# @app.post("/todos", status_code=201)
-# def create_todo(todo: Todo):
-#     # kiểm tra id đã tồn tại chưa
-#     for existing in todos:
-#         if existing.id == todo.id:
-#             raise HTTPException(status_code=400, detail="ID already exists")
-
-#     todos.append(todo)
-#     return todo
 
 # =========================
-# POST nhiều todo cùng lúc
+# POST /todos
 # =========================
 @app.post("/todos", status_code=201)
-def create_todos(todo_list: List[Todo]):
-    for todo in todo_list:
-        # kiểm tra id trùng
-        for existing in todos:
-            if existing.id == todo.id:
-                raise HTTPException(status_code=400, detail=f"ID {todo.id} already exists")
+def create_todo(todo: Todo):
+    for existing in todos:
+        if existing.id == todo.id:
+            raise HTTPException(status_code=400, detail="ID already exists")
 
-        todos.append(todo)
+    todos.append(todo)
+    return todo
 
-    return todo_list
+
 # =========================
-# 2️⃣ GET /todos - Lấy danh sách
+# GET /todos
+# Filter + Search + Sort + Pagination
 # =========================
 @app.get("/todos")
-def get_todos():
-    return todos
+def get_todos(
+    is_done: Optional[bool] = None,
+    q: Optional[str] = None,
+    sort: Optional[str] = None,
+    limit: int = Query(10, ge=1),
+    offset: int = Query(0, ge=0),
+):
+    results = todos.copy()
+
+    # 1️⃣ Filter
+    if is_done is not None:
+        results = [todo for todo in results if todo.is_done == is_done]
+
+    # 2️⃣ Search
+    if q:
+        results = [todo for todo in results if q.lower() in todo.title.lower()]
+
+    # 3️⃣ Sort
+    if sort:
+        reverse = sort.startswith("-")
+        field_name = sort.lstrip("-")
+
+        if field_name == "created_at":
+            results.sort(key=lambda x: x.created_at, reverse=reverse)
+
+    total = len(results)
+
+    # 4️⃣ Pagination
+    results = results[offset: offset + limit]
+
+    return {
+        "items": results,
+        "total": total,
+        "limit": limit,
+        "offset": offset
+    }
 
 
 # =========================
-# 3️⃣ GET /todos/{id} - Lấy chi tiết
+# GET /todos/{id}
 # =========================
 @app.get("/todos/{todo_id}")
 def get_todo(todo_id: int):
@@ -63,12 +88,13 @@ def get_todo(todo_id: int):
 
 
 # =========================
-# 4️⃣ PUT /todos/{id} - Cập nhật toàn bộ
+# PUT /todos/{id}
 # =========================
 @app.put("/todos/{todo_id}")
 def update_todo(todo_id: int, updated_todo: Todo):
     for index, todo in enumerate(todos):
         if todo.id == todo_id:
+            updated_todo.created_at = todo.created_at
             todos[index] = updated_todo
             return updated_todo
 
@@ -76,34 +102,12 @@ def update_todo(todo_id: int, updated_todo: Todo):
 
 
 # =========================
-# 5️⃣ DELETE /todos/{id} - Xóa
+# DELETE /todos/{id}
 # =========================
-# @app.delete("/todos/{todo_id}")
-# def delete_todo(todo_id: int):
-#     for index, todo in enumerate(todos):
-#         if todo.id == todo_id:
-#             deleted = todos.pop(index)
-#             return deleted
+@app.delete("/todos/{todo_id}")
+def delete_todo(todo_id: int):
+    for index, todo in enumerate(todos):
+        if todo.id == todo_id:
+            return todos.pop(index)
 
-#     raise HTTPException(status_code=404, detail="Todo not found")
-
-@app.delete("/todos")
-def delete_multiple_todos(ids: List[int]):
-    deleted_items = []
-    not_found_ids = []
-
-    for todo_id in ids:
-        found = False
-        for index, todo in enumerate(todos):
-            if todo.id == todo_id:
-                deleted_items.append(todos.pop(index))
-                found = True
-                break
-
-        if not found:
-            not_found_ids.append(todo_id)
-
-    return {
-        "deleted": deleted_items,
-        "not_found": not_found_ids
-    }
+    raise HTTPException(status_code=404, detail="Todo not found")
