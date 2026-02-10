@@ -1,137 +1,92 @@
-from fastapi import HTTPException
 from typing import Optional
-from app.schemas.todo import Todo
+
+from fastapi import HTTPException, status
+from sqlalchemy.orm import Session
+
 from app.repositories import todo_repository
-import json
-import time
+from app.schemas.todo import (
+    TodoCreate,
+    TodoUpdate,
+    TodoUpdatePartial,
+    TodoRead,
+)
 
 
-# region agent log
-def _agent_log(run_id: str, hypothesis_id: str, location: str, message: str, data: dict):
-    try:
-        ts = int(time.time() * 1000)
-        payload = {
-            "id": f"log_{ts}",
-            "timestamp": ts,
-            "location": location,
-            "message": message,
-            "data": data,
-            "runId": run_id,
-            "hypothesisId": hypothesis_id,
-        }
-        with open(
-            r"c:\Users\Admin\Documents\PROJECT_IT\to-do_list\.cursor\debug.log",
-            "a",
-            encoding="utf-8",
-        ) as f:
-            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
-    except Exception:
-        # tránh làm hỏng luồng chính nếu log lỗi
-        pass
-
-
-# endregion
-
-
-def create_todo(todo: Todo):
-    existing = todo_repository.get_by_id(todo.id)
-    if existing:
-        raise HTTPException(status_code=400, detail="ID already exists")
-
-    # region agent log
-    _agent_log(
-        run_id="pre-fix",
-        hypothesis_id="H1",
-        location="app/services/todo_service.py:create_todo",
-        message="create_todo called",
-        data={"todo_id": todo.id},
-    )
-    # endregion
-
-    return todo_repository.create(todo)
+def create_todo(db: Session, data: TodoCreate) -> TodoRead:
+    # nếu bạn muốn check trùng title, v.v. thì làm ở đây
+    todo = todo_repository.create(db, data=data)
+    return TodoRead.from_orm(todo)
 
 
 def get_todos(
+    db: Session,
+    *,
     is_done: Optional[bool],
     q: Optional[str],
     sort: Optional[str],
     limit: int,
     offset: int,
 ):
-    results = todo_repository.get_all().copy()
-
-    # region agent log
-    _agent_log(
-        run_id="pre-fix",
-        hypothesis_id="H2",
-        location="app/services/todo_service.py:get_todos",
-        message="get_todos initial",
-        data={
-            "count": len(results),
-            "is_done": is_done,
-            "q": q,
-            "sort": sort,
-            "limit": limit,
-            "offset": offset,
-        },
+    items = todo_repository.get_all(
+        db,
+        is_done=is_done,
+        q=q,
+        sort=sort,
+        limit=limit,
+        offset=offset,
     )
-    # endregion
-
-    # filter
-    if is_done is not None:
-        results = [t for t in results if t.is_done == is_done]
-
-    # search
-    if q:
-        results = [t for t in results if q.lower() in t.title.lower()]
-
-    # sort
-    if sort:
-        reverse = sort.startswith("-")
-        field_name = sort.lstrip("-")
-
-        if field_name == "created_at":
-            results.sort(key=lambda x: x.created_at, reverse=reverse)
-
-    total = len(results)
-    results = results[offset: offset + limit]
-
-    # region agent log
-    _agent_log(
-        run_id="pre-fix",
-        hypothesis_id="H3",
-        location="app/services/todo_service.py:get_todos",
-        message="get_todos final",
-        data={"returned": len(results), "total": total},
+    total = todo_repository.count_all(
+        db,
+        is_done=is_done,
+        q=q,
     )
-    # endregion
 
     return {
-        "items": results,
+        "items": [TodoRead.from_orm(t) for t in items],
         "total": total,
         "limit": limit,
         "offset": offset,
     }
 
 
-def get_todo(todo_id: int):
-    todo = todo_repository.get_by_id(todo_id)
+def get_todo(db: Session, todo_id: int) -> TodoRead:
+    todo = todo_repository.get_by_id(db, todo_id)
     if not todo:
-        raise HTTPException(status_code=404, detail="Todo not found")
-    return todo
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Todo not found")
+    return TodoRead.from_orm(todo)
 
 
-def update_todo(todo_id: int, updated: Todo):
-    existing = todo_repository.get_by_id(todo_id)
-    if not existing:
-        raise HTTPException(status_code=404, detail="Todo not found")
+def update_todo(db: Session, todo_id: int, data: TodoUpdate) -> TodoRead:
+    todo = todo_repository.get_by_id(db, todo_id)
+    if not todo:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Todo not found")
 
-    updated.created_at = existing.created_at
-    return todo_repository.update(todo_id, updated)
+    todo = todo_repository.update(db, todo=todo, data=data)
+    return TodoRead.from_orm(todo)
 
 
-def delete_todo(todo_id: int):
-    deleted = todo_repository.delete(todo_id)
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Todo not found")
-    return deleted
+def patch_todo(db: Session, todo_id: int, data: TodoUpdatePartial) -> TodoRead:
+    todo = todo_repository.get_by_id(db, todo_id)
+    if not todo:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Todo not found")
+
+    todo = todo_repository.partial_update(db, todo=todo, data=data)
+    return TodoRead.from_orm(todo)
+
+
+def complete_todo(db: Session, todo_id: int) -> TodoRead:
+    todo = todo_repository.get_by_id(db, todo_id)
+    if not todo:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Todo not found")
+
+    todo = todo_repository.mark_complete(db, todo=todo)
+    return TodoRead.from_orm(todo)
+
+
+def delete_todo(db: Session, todo_id: int):
+    todo = todo_repository.get_by_id(db, todo_id)
+    if not todo:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Todo not found")
+
+    todo_repository.delete(db, todo=todo)
+    return {"detail": "Deleted"}
