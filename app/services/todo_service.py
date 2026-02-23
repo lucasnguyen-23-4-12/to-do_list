@@ -10,17 +10,19 @@ from app.schemas.todo import (
     TodoUpdatePartial,
     TodoRead,
 )
+from app.models import UserORM
 
 
-def create_todo(db: Session, data: TodoCreate) -> TodoRead:
+def create_todo(db: Session, data: TodoCreate, current_user: UserORM) -> TodoRead:
     # nếu bạn muốn check trùng title, v.v. thì làm ở đây
-    todo = todo_repository.create(db, data=data)
+    todo = todo_repository.create(db, data=data, owner_id=current_user.id)
     return TodoRead.from_orm(todo)
 
 
 def get_todos(
     db: Session,
     *,
+    current_user: UserORM,
     is_done: Optional[bool],
     q: Optional[str],
     sort: Optional[str],
@@ -29,6 +31,7 @@ def get_todos(
 ):
     items = todo_repository.get_all(
         db,
+        owner_id=current_user.id,
         is_done=is_done,
         q=q,
         sort=sort,
@@ -37,6 +40,7 @@ def get_todos(
     )
     total = todo_repository.count_all(
         db,
+        owner_id=current_user.id,
         is_done=is_done,
         q=q,
     )
@@ -49,15 +53,15 @@ def get_todos(
     }
 
 
-def get_todo(db: Session, todo_id: int) -> TodoRead:
-    todo = todo_repository.get_by_id(db, todo_id)
+def get_todo(db: Session, todo_id: int, current_user: UserORM) -> TodoRead:
+    todo = todo_repository.get_by_id(db, todo_id, owner_id=current_user.id)
     if not todo:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Todo not found")
     return TodoRead.from_orm(todo)
 
 
-def update_todo(db: Session, todo_id: int, data: TodoUpdate) -> TodoRead:
-    todo = todo_repository.get_by_id(db, todo_id)
+def update_todo(db: Session, todo_id: int, data: TodoUpdate, current_user: UserORM) -> TodoRead:
+    todo = todo_repository.get_by_id(db, todo_id, owner_id=current_user.id)
     if not todo:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Todo not found")
 
@@ -65,8 +69,8 @@ def update_todo(db: Session, todo_id: int, data: TodoUpdate) -> TodoRead:
     return TodoRead.from_orm(todo)
 
 
-def patch_todo(db: Session, todo_id: int, data: TodoUpdatePartial) -> TodoRead:
-    todo = todo_repository.get_by_id(db, todo_id)
+def patch_todo(db: Session, todo_id: int, data: TodoUpdatePartial, current_user: UserORM) -> TodoRead:
+    todo = todo_repository.get_by_id(db, todo_id, owner_id=current_user.id)
     if not todo:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Todo not found")
 
@@ -74,8 +78,8 @@ def patch_todo(db: Session, todo_id: int, data: TodoUpdatePartial) -> TodoRead:
     return TodoRead.from_orm(todo)
 
 
-def complete_todo(db: Session, todo_id: int) -> TodoRead:
-    todo = todo_repository.get_by_id(db, todo_id)
+def complete_todo(db: Session, todo_id: int, current_user: UserORM) -> TodoRead:
+    todo = todo_repository.get_by_id(db, todo_id, owner_id=current_user.id)
     if not todo:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Todo not found")
 
@@ -83,8 +87,8 @@ def complete_todo(db: Session, todo_id: int) -> TodoRead:
     return TodoRead.from_orm(todo)
 
 
-def delete_todo(db: Session, todo_id: int):
-    todo = todo_repository.get_by_id(db, todo_id)
+def delete_todo(db: Session, todo_id: int, current_user: UserORM):
+    todo = todo_repository.get_by_id(db, todo_id, owner_id=current_user.id)
     if not todo:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Todo not found")
 

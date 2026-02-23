@@ -14,24 +14,23 @@ from app.schemas.todo import (
 def get_all(
     db: Session,
     *,
+    owner_id: int,
     is_done: Optional[bool] = None,
     q: Optional[str] = None,
     sort: Optional[str] = None,
     limit: int = 10,
     offset: int = 0,
 ) -> List[TodoORM]:
-    query = select(TodoORM)
+    # chỉ lấy todo của user này
+    query = select(TodoORM).where(TodoORM.owner_id == owner_id)
 
-    # filter is_done
     if is_done is not None:
         query = query.where(TodoORM.is_done == is_done)
 
-    # search q trong title
     if q:
         like = f"%{q}%"
         query = query.where(TodoORM.title.ilike(like))
 
-    # sort
     if sort:
         desc = sort.startswith("-")
         field = sort.lstrip("-")
@@ -48,18 +47,16 @@ def get_all(
 
         query = query.order_by(col)
 
-    # pagination thực từ DB
     query = query.offset(offset).limit(limit)
-
     return db.execute(query).scalars().all()
-
 def count_all(
     db: Session,
     *,
+    owner_id: int,
     is_done: Optional[bool] = None,
     q: Optional[str] = None,
 ) -> int:
-    query = select(TodoORM)
+    query = select(TodoORM).where(TodoORM.owner_id == owner_id)
 
     if is_done is not None:
         query = query.where(TodoORM.is_done == is_done)
@@ -68,19 +65,21 @@ def count_all(
         like = f"%{q}%"
         query = query.where(TodoORM.title.ilike(like))
 
-    # Lấy hết rồi dùng len(...) để đếm
     return len(db.execute(query).scalars().all())
 
+def get_by_id(db: Session, todo_id: int, owner_id: int) -> Optional[TodoORM]:
+    stmt = select(TodoORM).where(
+        TodoORM.id == todo_id,
+        TodoORM.owner_id == owner_id,
+    )
+    return db.execute(stmt).scalar_one_or_none()
 
-def get_by_id(db: Session, todo_id: int) -> Optional[TodoORM]:
-    return db.get(TodoORM, todo_id)
-
-
-def create(db: Session, data: TodoCreate) -> TodoORM:
+def create(db: Session, data: TodoCreate, owner_id: int) -> TodoORM:
     todo = TodoORM(
         title=data.title,
         description=data.description,
         is_done=data.is_done,
+        owner_id=owner_id,
     )
     db.add(todo)
     db.commit()

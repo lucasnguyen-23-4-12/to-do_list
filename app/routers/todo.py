@@ -11,6 +11,8 @@ from app.schemas.todo import (
     TodoRead,
 )
 from app.services import todo_service
+from app.deps import get_current_user
+from app.models import UserORM
 
 router = APIRouter(prefix="/api/v1/todos", tags=["Todos"])
 
@@ -19,8 +21,9 @@ router = APIRouter(prefix="/api/v1/todos", tags=["Todos"])
 def create(
     todo: TodoCreate,
     db: Session = Depends(get_db),
+    current_user: UserORM = Depends(get_current_user),
 ):
-    return todo_service.create_todo(db, todo)
+    return todo_service.create_todo(db, todo, current_user)
 
 
 @router.get("/", response_model=dict)
@@ -31,9 +34,11 @@ def get_all(
     limit: int = Query(10, ge=1),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
+    current_user: UserORM = Depends(get_current_user),
 ):
     return todo_service.get_todos(
         db,
+        current_user=current_user,
         is_done=is_done,
         q=q,
         sort=sort,
@@ -46,8 +51,9 @@ def get_all(
 def get_one(
     todo_id: int,
     db: Session = Depends(get_db),
+    current_user: UserORM = Depends(get_current_user),
 ):
-    return todo_service.get_todo(db, todo_id)
+    return todo_service.get_todo(db, todo_id, current_user)
 
 
 @router.put("/{todo_id}", response_model=TodoRead)
@@ -55,8 +61,9 @@ def update(
     todo_id: int,
     updated: TodoUpdate,
     db: Session = Depends(get_db),
+    current_user: UserORM = Depends(get_current_user),
 ):
-    return todo_service.update_todo(db, todo_id, updated)
+    return todo_service.update_todo(db, todo_id, updated, current_user)
 
 
 @router.patch("/{todo_id}", response_model=TodoRead)
@@ -64,21 +71,24 @@ def patch(
     todo_id: int,
     body: TodoUpdatePartial,
     db: Session = Depends(get_db),
+    current_user: UserORM = Depends(get_current_user),
 ):
-    return todo_service.patch_todo(db, todo_id, body)
+    return todo_service.patch_todo(db, todo_id, body, current_user)
 
 
 @router.post("/{todo_id}/complete", response_model=TodoRead)
 def complete(
     todo_id: int,
     db: Session = Depends(get_db),
+    current_user: UserORM = Depends(get_current_user),
 ):
-    return todo_service.complete_todo(db, todo_id)
+    return todo_service.complete_todo(db, todo_id, current_user)
 
 
 @router.delete("/{todo_id}")
 def delete(
     todo_id: int,
     db: Session = Depends(get_db),
+    current_user: UserORM = Depends(get_current_user),
 ):
-    return todo_service.delete_todo(db, todo_id)
+    return todo_service.delete_todo(db, todo_id, current_user)

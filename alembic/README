@@ -1,1 +1,10 @@
-Generic single-database configuration.
+cd "C:\Users\Admin\Documents\PROJECT_IT\to-do_list"
+C:\Users\Admin\AppData\Local\Microsoft\WinGet\Packages\SQLite.SQLite_Microsoft.Winget.Source_8wekyb3d8bbwe\sqlite3.exe todos.db
+
+
+.tables;
+.schema todos;
+SELECT id, title, is_done, created_at, updated_at
+FROM todos
+ORDER BY id DESC
+LIMIT 10;
