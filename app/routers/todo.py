@@ -47,6 +47,28 @@ def get_all(
     )
 
 
+@router.get("/overdue", response_model=dict)
+def get_overdue(
+    limit: int = Query(10, ge=1),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_user: UserORM = Depends(get_current_user),
+):
+    """Lấy danh sách todo quá hạn (is_done=False và due_date < hôm nay)"""
+    return todo_service.get_overdue_todos(db, current_user, limit, offset)
+
+
+@router.get("/today", response_model=dict)
+def get_today(
+    limit: int = Query(10, ge=1),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_user: UserORM = Depends(get_current_user),
+):
+    """Lấy danh sách todo hôm nay (is_done=False và due_date = hôm nay)"""
+    return todo_service.get_today_todos(db, current_user, limit, offset)
+
+
 @router.get("/{todo_id}", response_model=TodoRead)
 def get_one(
     todo_id: int,

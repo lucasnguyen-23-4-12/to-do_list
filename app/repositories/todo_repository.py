@@ -1,9 +1,11 @@
 from typing import List, Optional
+from datetime import datetime, date
 
-from sqlalchemy import select
+from sqlalchemy import select, and_, or_
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
-from app.models import TodoORM
+from app.models import TodoORM, TagORM
 from app.schemas.todo import (
     TodoCreate,
     TodoUpdate,
@@ -79,9 +81,23 @@ def create(db: Session, data: TodoCreate, owner_id: int) -> TodoORM:
         title=data.title,
         description=data.description,
         is_done=data.is_done,
+        due_date=data.due_date,
         owner_id=owner_id,
     )
     db.add(todo)
+    db.flush()  # flush to get the ID
+    
+    # Add tags nếu có
+    if data.tags:
+        for tag_name in data.tags:
+            stmt = select(TagORM).where(TagORM.name == tag_name)
+            tag = db.execute(stmt).scalar_one_or_none()
+            if not tag:
+                tag = TagORM(name=tag_name)
+                db.add(tag)
+                db.flush()
+            todo.tags.append(tag)
+    
     db.commit()
     db.refresh(todo)
     return todo
@@ -91,6 +107,20 @@ def update(db: Session, todo: TodoORM, data: TodoUpdate) -> TodoORM:
     todo.title = data.title
     todo.description = data.description
     todo.is_done = data.is_done
+    todo.due_date = data.due_date
+    
+    # Update tags
+    if data.tags is not None:
+        todo.tags.clear()
+        for tag_name in data.tags:
+            stmt = select(TagORM).where(TagORM.name == tag_name)
+            tag = db.execute(stmt).scalar_one_or_none()
+            if not tag:
+                tag = TagORM(name=tag_name)
+                db.add(tag)
+                db.flush()
+            todo.tags.append(tag)
+    
     db.commit()
     db.refresh(todo)
     return todo
@@ -108,6 +138,20 @@ def partial_update(
         todo.description = data.description
     if data.is_done is not None:
         todo.is_done = data.is_done
+    if data.due_date is not None:
+        todo.due_date = data.due_date
+    
+    # Update tags
+    if data.tags is not None:
+        todo.tags.clear()
+        for tag_name in data.tags:
+            stmt = select(TagORM).where(TagORM.name == tag_name)
+            tag = db.execute(stmt).scalar_one_or_none()
+            if not tag:
+                tag = TagORM(name=tag_name)
+                db.add(tag)
+                db.flush()
+            todo.tags.append(tag)
 
     db.commit()
     db.refresh(todo)
@@ -124,3 +168,77 @@ def mark_complete(db: Session, todo: TodoORM) -> TodoORM:
 def delete(db: Session, todo: TodoORM) -> None:
     db.delete(todo)
     db.commit()
+
+
+def get_overdue(
+    db: Session,
+    owner_id: int,
+    limit: int = 10,
+    offset: int = 0,
+) -> List[TodoORM]:
+    """Get todo quá hạn (due_date < hôm nay và is_done = False)"""
+    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    query = select(TodoORM).where(
+        and_(
+            TodoORM.owner_id == owner_id,
+            TodoORM.is_done == False,
+            TodoORM.due_date < today,
+        )
+    ).order_by(TodoORM.due_date.asc())
+    
+    query = query.offset(offset).limit(limit)
+    return db.execute(query).scalars().all()
+
+
+def count_overdue(db: Session, owner_id: int) -> int:
+    """Đếm số todo quá hạn"""
+    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    query = select(TodoORM).where(
+        and_(
+            TodoORM.owner_id == owner_id,
+            TodoORM.is_done == False,
+            TodoORM.due_date < today,
+        )
+    )
+    return len(db.execute(query).scalars().all())
+
+
+def get_today(
+    db: Session,
+    owner_id: int,
+    limit: int = 10,
+    offset: int = 0,
+) -> List[TodoORM]:
+    """Get todo hôm nay (due_date = hôm nay và is_done = False)"""
+    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    tomorrow = datetime.fromtimestamp(today.timestamp() + 86400)
+    
+    query = select(TodoORM).where(
+        and_(
+            TodoORM.owner_id == owner_id,
+            TodoORM.is_done == False,
+            TodoORM.due_date >= today,
+            TodoORM.due_date < tomorrow,
+        )
+    ).order_by(TodoORM.due_date.asc())
+    
+    query = query.offset(offset).limit(limit)
+    return db.execute(query).scalars().all()
+
+
+def count_today(db: Session, owner_id: int) -> int:
+    """Đếm số todo hôm nay"""
+    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    tomorrow = datetime.fromtimestamp(today.timestamp() + 86400)
+    
+    query = select(TodoORM).where(
+        and_(
+            TodoORM.owner_id == owner_id,
+            TodoORM.is_done == False,
+            TodoORM.due_date >= today,
+            TodoORM.due_date < tomorrow,
+        )
+    )
+    return len(db.execute(query).scalars().all())

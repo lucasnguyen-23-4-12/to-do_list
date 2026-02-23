@@ -53,6 +53,52 @@ def get_todos(
     }
 
 
+def get_overdue_todos(
+    db: Session,
+    current_user: UserORM,
+    limit: int,
+    offset: int,
+):
+    """Lấy danh sách todo quá hạn"""
+    items = todo_repository.get_overdue(
+        db,
+        owner_id=current_user.id,
+        limit=limit,
+        offset=offset,
+    )
+    total = todo_repository.count_overdue(db, owner_id=current_user.id)
+
+    return {
+        "items": [TodoRead.from_orm(t) for t in items],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+def get_today_todos(
+    db: Session,
+    current_user: UserORM,
+    limit: int,
+    offset: int,
+):
+    """Lấy danh sách todo hôm nay"""
+    items = todo_repository.get_today(
+        db,
+        owner_id=current_user.id,
+        limit=limit,
+        offset=offset,
+    )
+    total = todo_repository.count_today(db, owner_id=current_user.id)
+
+    return {
+        "items": [TodoRead.from_orm(t) for t in items],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
+
+
 def get_todo(db: Session, todo_id: int, current_user: UserORM) -> TodoRead:
     todo = todo_repository.get_by_id(db, todo_id, owner_id=current_user.id)
     if not todo:
